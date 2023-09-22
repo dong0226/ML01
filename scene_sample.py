@@ -44,6 +44,7 @@ class PushEnv(gym.Env):
 
         
     def step(self, action):
+        # --------- robot control ----------
         dx, dy, dz = action
         dx *= self.dv
         dy *= self.dv
@@ -66,11 +67,21 @@ class PushEnv(gym.Env):
         
         p.stepSimulation()
         
+        # --------- reward calculation ----------
         reward = 0
         obs = None
         done = False
         info = None
         
+        # get the object's position and orientation
+        ObjState = p.getBasePositionAndOrientation(self.objUid) 
+        ObjPosition = ObjState[0]
+        ObjOrientation = ObjState[1] # the orientation is in quaternion form
+        
+        # PLEASE modify the reward function in this part 
+        
+        if False: # add terminal condition
+            done = True
         
         
         return obs, reward, done, info
