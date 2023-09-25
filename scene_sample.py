@@ -106,6 +106,11 @@ class PushEnv(gym.Env):
         ObjPosition = ObjState[0]
         ObjOrientation = ObjState[1] # the orientation is in quaternion form
         
+        # get contact information
+        contact_pts = p.getContactPoints(self.pandaUid, self.objUid, 8, -1) # link 8 and base link
+        if contact_pts:
+            print("--", contact_pts)
+        
         img = self.render()
         # plt.imshow(img)
         # plt.show()
@@ -155,8 +160,8 @@ if __name__ == "__main__":
     i = 0
 
     t1 = time()
-    while i < 20*10:
-        env.step([0, 0, -1])
+    while i < 20*1000:
+        env.step([0, 0, -1*0])
         i += 1
         
     print(f"\n\nsimulated 10 seconds in {time() - t1} seconds\n\n")
