@@ -22,14 +22,14 @@ class PushEnv(gym.Env):
         
         self.action_space = spaces.Box(low=np.ones(3)*-1, high=np.ones(3)) # eef vel: [vx, vy, vz]
         self.observation_space = gym.spaces.Dict({
-            'cam_img': gym.spaces.Box(low=0, high=255, shape=(480, 480, 3), dtype=np.uint8),
-            'eef_pos': gym.spaces.Box(low=np.ones(3)*-1, high=np.ones(3), dtype=np.float32)
+            'cam_img': gym.spaces.Box(low=0, high=255, shape=(240, 240, 3), dtype=np.uint8),
+            'eef_pos': gym.spaces.Box(low=np.array([0, -0.5, 0]), high=np.array([1, 0.5, 1]), dtype=np.float32)
         })
         
         
-        dt = 1./20.
-        p.setTimeStep(dt)
-        self.dv = 5 * dt
+        self.dt = 1./20.
+        p.setTimeStep(self.dt)
+        self.dv = 5 * self.dt
         self.visPitch = -50
         self.visYaw = 50
         self.visDis = 1.5
@@ -46,15 +46,21 @@ class PushEnv(gym.Env):
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,0)
         # p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         # p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 1)
-        
-        p.resetSimulation()
 
-        self.tableUid = p.loadURDF("models/table/table.urdf",basePosition=[0.5,0,-0.63])
-        self.objUid = p.loadURDF("models/random/010.urdf", 
-                            basePosition=[0.5, 0, 0.1], 
-                            baseOrientation=p.getQuaternionFromEuler([pi/2, 0, 0]), 
-                            globalScaling=2)
-        self.GoalUid = p.loadURDF("models/block.urdf",basePosition=[0.8,-0.3, 0])
+        p.resetSimulation()
+        # self.goal = np.array([0.8, -0.3, 0])
+        self.goal = np.random.uniform(low=[0.6, -0.4, 0], high=[1, 0.4, 0])
+        self.init_pos = np.random.uniform(low=[0.3, -0.4, 0], high=[0.6, 0.4, 0])
+        self.distVec = self.goal - self.init_pos
+
+        self.tableUid = p.loadURDF("models/table/table.urdf",basePosition=[0.5,0,-0.62])
+        # self.objUid = p.loadURDF("models/random/010.urdf", 
+        #                     basePosition=[0.5, 0, 0.05], 
+        #                     baseOrientation=p.getQuaternionFromEuler([pi/2, 0, 0]), 
+        #                     globalScaling=2)
+        self.objUid = p.loadURDF("models/random/cube0.urdf", basePosition=self.init_pos, globalScaling=1)
+        self.GoalUid = p.loadURDF("models/block.urdf",basePosition=self.goal)
+        
 
         p.setGravity(gravX=0, gravY=0, gravZ=-9.81) # set gravity
 
@@ -95,32 +101,58 @@ class PushEnv(gym.Env):
         
         p.stepSimulation()
         
-        # --------- reward calculation ----------
-        reward = 0
-        obs = None
+        # --------- get observation ----------
+        reward = -0.5 * self.dt # initialize the reward with the time penalty
+        obs = ()
         done = False
         info = None
         
         # get the object's position and orientation
-        ObjState = p.getBasePositionAndOrientation(self.objUid) 
-        ObjPosition = ObjState[0]
-        ObjOrientation = ObjState[1] # the orientation is in quaternion form
+        ObjState = p.getBasePositionAndOrientation(self.objUid)
+
+        objVel = np.array(p.getBaseVelocity(self.objUid))[0]
+        objPos = np.array(ObjState[0])
+        objOrn = ObjState[1] # the orientation is in quaternion form
+        objEuler = np.array(p.getEulerFromQuaternion(objOrn))
+
+        effPos = np.array(p.getLinkState(self.pandaUid, 8)[0])
+
+        
         
         # get contact information
         contact_pts = p.getContactPoints(self.pandaUid, self.objUid, 8, -1) # link 8 and base link
-        if contact_pts:
-            print("--", contact_pts)
+        # if contact_pts:
+        #     print("--", contact_pts)
         
         img = self.render()
-        # plt.imshow(img)
-        # plt.show()
+
+        obs += (img, effPos)
         
-        # PLEASE modify the reward function in this part 
+        # --------- reward calculation ----------
+
+        velReward = self.distVec[:2] @ objVel[:2]
+        reward += velReward * 100  #* self.dt * 0.1
+        # print(velReward * 100)
+
+        # add a penalty if the object doesn't move
+        if np.linalg.norm(objVel[:2]) <= 0.002:
+            reward -= 0.5 * self.dt
+
         
-        if False: # set the terminal condition
+        # set the terminal condition
+        if objPos[2] < -0.1: # the object falls down the table
             done = True
+            reward -= 1
+        # elif abs(objOrn[0]) : # the object is toppled
+            # done = True
+            # reward -= 1
+        elif np.linalg.norm(objPos[:2] - self.goal[:2]) < 0.1: # the object reaches the goal
+                done = True
+                reward += 1
         
-        
+        # print(reward)
+        self.distVec = self.goal - objPos
+
         return obs, reward, done, info
         
     def render(self):
@@ -136,7 +168,7 @@ class PushEnv(gym.Env):
                                                  nearVal=0.1,
                                                  farVal=100.0)
         
-        (_,_,px,_,_)=p.getCameraImage(width=W,
+        (_, _, px, _, _)=p.getCameraImage(width=W,
                                       height=H,
                                       viewMatrix=view_matrix,
                                       projectionMatrix=proj_matrix,
@@ -160,8 +192,10 @@ if __name__ == "__main__":
     i = 0
 
     t1 = time()
-    while i < 20*1000:
-        env.step([0, 0, -1*0])
+    done = False
+    # while i < 20*1000:
+    while not done:
+        _, _, done, _ = env.step([0, 0, -1*0])
         i += 1
         
     print(f"\n\nsimulated 10 seconds in {time() - t1} seconds\n\n")

@@ -1,3 +1,4 @@
+<?xml version="1.0" ?>
 <robot name="blob010">
   <link name="random_obj_010">
     <contact>
