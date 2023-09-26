@@ -16,10 +16,9 @@ model = SAC(env=env, policy=MultiInputPolicy, buffer_size=10000, verbose=1, devi
 
 from tqdm import tqdm
 
-for i in tqdm(range(1000)):
+for i in tqdm(range(10000)):
    model.learn(1_000, log_interval=100)
-
-model.save("sac-PandaReachDense-v3")
-env.save("vec_normalize.pkl")
+   model.save("sac-PandaReachDense-v3")
+   env.save("vec_normalize.pkl")
 
 

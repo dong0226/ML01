@@ -24,7 +24,9 @@ class PushEnv(gym.Env):
         self.action_space = spaces.Box(low=np.ones(3)*-1, high=np.ones(3)) # eef vel: [vx, vy, vz]
         self.observation_space = gym.spaces.Dict({
             'cam_img': gym.spaces.Box(low=0, high=255, shape=(240, 240, 3), dtype=np.uint8),
-            'eef_pos': gym.spaces.Box(low=np.array([0, -0.5, 0]), high=np.array([1, 0.5, 1]), dtype=np.float32)
+            'eef_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
+                                      high=np.array([1, 0.5, 1]) +0.05, 
+                                      dtype=np.float32)
         })
         
         
@@ -51,7 +53,7 @@ class PushEnv(gym.Env):
         p.resetSimulation()
         # self.goal = np.array([0.8, -0.3, 0])
         self.goal = np.random.uniform(low=[0.6, -0.4, 0], high=[1, 0.4, 0])
-        self.init_pos = np.random.uniform(low=[0.3, -0.4, 0], high=[0.6, 0.4, 0])
+        self.init_pos = np.random.uniform(low=[0.4, -0.4, 0], high=[0.6, 0.4, 0])
         self.distVec = self.goal - self.init_pos
 
         self.tableUid = p.loadURDF("models/table/table.urdf",basePosition=[0.5,0,-0.62])
@@ -80,7 +82,7 @@ class PushEnv(gym.Env):
         eefPos = np.array(p.getLinkState(self.pandaUid, 8)[0])
         observation = {
             "cam_img": img, 
-            "eef_pos": eefPos
+            "eef_pos": eefPos.astype(np.float32)
         }
 
         return observation, {}
@@ -208,7 +210,8 @@ if __name__ == "__main__":
     done = False
     # while i < 20*1000:
     while not done:
-        _, _, done, _, _ = env.step([0, 0, -1*0])
+        obs, _, done, _, _ = env.step([0, 0, -1*0])
         i += 1
+        print(obs)
         
     print(f"\n\nsimulated 10 seconds in {time() - t1} seconds\n\n")
