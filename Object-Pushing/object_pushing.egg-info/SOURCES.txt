@@ -1,6 +1,0 @@
-setup.py
-object_pushing.egg-info/PKG-INFO
-object_pushing.egg-info/SOURCES.txt
-object_pushing.egg-info/dependency_links.txt
-object_pushing.egg-info/requires.txt
-object_pushing.egg-info/top_level.txt
