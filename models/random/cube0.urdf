@@ -18,7 +18,7 @@
 				<mesh filename="cube.obj" scale="0.1 0.1 0.1"/>
       </geometry>
        <material name="white">
-        <color rgba="1 1 1 1"/>
+        <color rgba="0.6 0.8 1 1"/>
       </material>
     </visual>
     <collision>

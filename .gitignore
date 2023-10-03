@@ -1,4 +1,7 @@
 __pycache__/
 Object-Pushing/object_pushing/__pycache__/
 Object-Pushing/object_pushing/envs/__pycache__/
-Object-Pushing/object_pushing.egg-info
+Object-Pushing/object_pushing.egg-info/
+tmp/
+sac_log/
+sac-pushing-v0.zip
