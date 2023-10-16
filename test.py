@@ -83,8 +83,8 @@ env = Monitor(env, log_dir)
 n_actions = env.action_space.shape[-1]
 action_noise = OrnsteinUhlenbeckActionNoise(mean=np.zeros(n_actions), sigma=0.5 * np.ones(n_actions), dt=1/20, theta=0.6)
 
-# model = SAC(env=env, policy=MultiInputPolicy, buffer_size=100000, verbose=1, device="cuda")#, tensorboard_log="sac_log")
-model = TD3(env=env, policy=TD3MultiInputPolicy, buffer_size=100000, action_noise=action_noise, verbose=1, device="cuda")
+model = SAC(env=env, policy=MultiInputPolicy, buffer_size=100000, batch_size=512, verbose=1, device="cuda")#, tensorboard_log="sac_log")
+# model = TD3(env=env, policy=TD3MultiInputPolicy, buffer_size=200000, batch_size=512, action_noise=action_noise, verbose=1, device="cuda")
 
 # Create the callback: check every 1000 steps
 callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, verbose=0)
@@ -94,8 +94,8 @@ from tqdm import tqdm
 # plt.ion()
 for iter, i in enumerate(tqdm(range(10_000))):
    model.learn(2000, log_interval=500, callback=callback)
-  #  model.save("sac-pushing-v0")
-   model.save("ddpg-pushing-v0")
+   model.save("sac-pushing-v0")
+  #  model.save("ddpg-pushing-v0")
 
   #  plt.clf()
   #  plot_results([log_dir], (iter+1)*2000, results_plotter.X_TIMESTEPS, "TD3 LunarLander")

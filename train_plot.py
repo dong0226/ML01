@@ -7,6 +7,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from time import sleep
 
 # Read the CSV file into a DataFrame without a header and name the column as 'r'
 df = pd.read_csv('tmp/monitor.csv', names=['r'], index_col=False)
@@ -32,4 +33,6 @@ plt.xlabel('Episode')
 plt.ylabel('Reward')
 plt.title('Plot of Data from CSV')
 plt.grid()
-plt.show()
+plt.show(block=False)
+plt.pause(5)
+plt.close()

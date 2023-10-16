@@ -15,12 +15,13 @@ from time import sleep, time
 import matplotlib.pyplot as plt
 
 class PushEnv(gym.Env):
-    def __init__(self, use_camera=False):
+    def __init__(self, use_camera=True, use_gui=True):
         # p.connect(p.GUI)/
 
         self.use_camera = use_camera
+        self.use_gui = use_gui
 
-        if use_camera:
+        if use_gui:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
@@ -76,6 +77,10 @@ class PushEnv(gym.Env):
         p.setAdditionalSearchPath(pd.getDataPath())
         
     def reset(self, seed=None):
+        if self.use_camera and not(self.use_gui):
+            # p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,0)
+            p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
+
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,0)
         # p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         # p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 1)
@@ -116,7 +121,8 @@ class PushEnv(gym.Env):
 
 
 
-        p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,1)
+        if self.use_camera and (self.use_gui):
+            p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,1)
 
         for _ in range(30):
             self.step([0, 0])[0]
@@ -291,12 +297,16 @@ class PushEnv(gym.Env):
                                       viewMatrix=view_matrix,
                                       projectionMatrix=proj_matrix,
                                       renderer=p.ER_BULLET_HARDWARE_OPENGL, 
-                                      flags=p.ER_NO_SEGMENTATION_MASK)
+                                      flags=p.ER_NO_SEGMENTATION_MASK, 
+                                    #   shadow=0, 
+                                      )
         
         rgb_array=np.array(px,dtype=np.uint8)
         # rgb_array=np.reshape(rgb_array,(H,W,4))
         rgb_array=rgb_array[:, :, :3]
 
+        # plt.imshow(rgb_array)
+        # plt.show()
         return rgb_array
         
     def close(self):
@@ -304,17 +314,18 @@ class PushEnv(gym.Env):
 
  
 if __name__ == "__main__":
-    env = PushEnv()
+    env = PushEnv(use_camera=True, use_gui=False)
     env.reset()
     
     i = 0
 
     t1 = time()
     done = False
-    # while i < 20*1000:
-    while not done:
+    while i < 20* 30:
+    # while not done:
         obs, _, done, _, _ = env.step([1, 0])
         i += 1
         # print(obs)
-        
-    print(f"\n\nsimulated 10 seconds in {time() - t1} seconds\n\n")
+    
+    t = time() - t1
+    print(f"\n\nsimulated 30 seconds in {t} seconds, average: { t / 30 }\n\n")
