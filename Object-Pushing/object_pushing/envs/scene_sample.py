@@ -256,9 +256,9 @@ class PushEnv(gym.Env):
         elif objPos[2] < -0.1: # the object falls down the table
             done = True
             reward -= 2
-        # elif abs(objOrn[0]) : # the object is toppled
-            # done = True
-            # reward -= 1
+        elif abs(objOrn[0]) >= pi/4 or abs(objOrn[1]) >= pi/4: # the object is toppled
+            done = True
+            reward -= 1
         elif np.linalg.norm(objPos[:2] - self.goal[:2]) < 0.1: # the object reaches the goal
             done = True
             reward += 50
