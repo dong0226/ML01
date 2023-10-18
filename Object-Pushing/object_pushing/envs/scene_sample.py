@@ -16,8 +16,6 @@ import matplotlib.pyplot as plt
 
 class PushEnv(gym.Env):
     def __init__(self, use_camera=True, use_gui=True):
-        # p.connect(p.GUI)/
-
         self.use_camera = use_camera
         self.use_gui = use_gui
 
@@ -30,40 +28,32 @@ class PushEnv(gym.Env):
         
         self.action_space = spaces.Box(low=np.ones(2)*-1, high=np.ones(2)) # eef vel: [vx, vy, vz]
 
+        state_dict = {
+                'eef_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
+                                        high=np.array([1, 0.5, 1]) +0.05, 
+                                        dtype=np.float32),
+                'obj_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
+                                        high=np.array([1, 0.5, 1]) +0.05, 
+                                        dtype=np.float32),
+                'goal_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
+                                        high=np.array([1, 0.5, 1]) +0.05, 
+                                        dtype=np.float32),
+            }
         if use_camera:
-            self.observation_space = gym.spaces.Dict({
-                'cam_img': gym.spaces.Box(low=0, high=255, shape=(240, 240, 3), dtype=np.uint8),
-                'eef_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
-                                        high=np.array([1, 0.5, 1]) +0.05, 
-                                        dtype=np.float32),
-                'obj_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
-                                        high=np.array([1, 0.5, 1]) +0.05, 
-                                        dtype=np.float32),
-                'goal_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
-                                        high=np.array([1, 0.5, 1]) +0.05, 
-                                        dtype=np.float32),
-            })
-        else:
-            self.observation_space = gym.spaces.Dict({
-                'eef_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
-                                        high=np.array([1, 0.5, 1]) +0.05, 
-                                        dtype=np.float32),
-                'obj_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
-                                        high=np.array([1, 0.5, 1]) +0.05, 
-                                        dtype=np.float32),
-                'goal_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
-                                        high=np.array([1, 0.5, 1]) +0.05, 
-                                        dtype=np.float32),
-                })
+            state_dict['cam_img'] = gym.spaces.Box(low=0, high=255, shape=(240, 240, 3), dtype=np.uint8)
+            
+        self.observation_space = gym.spaces.Dict(state_dict)
 
         # self.observation_space = gym.spaces.Box(low=0, high=255, shape=(240, 240, 3), dtype=np.uint8)
         
         self.max_step = 200
         self.dt = 1./20.
         p.setTimeStep(self.dt)
-        self.dv = 1 * self.dt
-        self.visPitch = -50 -10
-        self.visYaw = 50 +40
+        self.dv = 2 * self.dt
+        
+        # define camera pose
+        self.visPitch = -60
+        self.visYaw = 90
         self.visDis = 1
         self.visTargetPos = [0.5, 0, 0]
         self.z = 0.14
@@ -93,7 +83,7 @@ class PushEnv(gym.Env):
 
         robot_init_y = np.random.uniform(low=-0.4, high=0.4)
 
-        self.tableUid = p.loadURDF("models/table/table.urdf",basePosition=[0.5,0,-0.62])
+        self.tableUid = p.loadURDF("models/table/table.urdf",basePosition=[0.5, 0, -0.62])
         # self.objUid = p.loadURDF("models/random/010.urdf", 
         #                     basePosition=[0.5, 0, 0.05], 
         #                     baseOrientation=p.getQuaternionFromEuler([pi/2, 0, 0]), 
@@ -199,8 +189,6 @@ class PushEnv(gym.Env):
         eefStates = p.getLinkState(self.pandaUid, 8, computeLinkVelocity=1)
         eefPos = np.array(eefStates[0])
         eefVel = np.array(eefStates[6])
-
-        
         
         # get contact information
         contact_pts = p.getContactPoints(self.pandaUid, self.objUid, 8, -1) # link 8 and base link
@@ -244,34 +232,40 @@ class PushEnv(gym.Env):
 
             reward += 20 * self.dt *  (effDist @ eefVel[:2])
 
-
+        # define output info
+        info = {"success": False, 
+                "toppled": False,
+                "dropped": False, 
+                "timeout": False, 
+                "out-of-range": False
+                }
         
+        objEuler = p.getEulerFromQuaternion(objOrn)
         # set the terminal condition
         if abs(eefPos[1]) > 0.5 or eefPos[0] < -0.1 or eefPos[0] > 0.55: # the eef goes outside the working area
             done = True
-            if eefPos[0] > 0.55:
-                reward -= 5
-            else:
-                reward -= 2
+            reward -= 5
+            info['out-of-range'] = True
         elif objPos[2] < -0.1: # the object falls down the table
             done = True
             reward -= 2
-        elif abs(objOrn[0]) >= pi/4 or abs(objOrn[1]) >= pi/4: # the object is toppled
+            info['dropped'] = True
+        elif abs(objEuler[0]) >= pi/4 or abs(objEuler[1]) >= pi/4: # the object is toppled
             done = True
             reward -= 1
+            info['toppled'] = True
         elif np.linalg.norm(objPos[:2] - self.goal[:2]) < 0.1: # the object reaches the goal
             done = True
             reward += 50
-        else:
-            if self.current_step >= self.max_step:
+            info['success'] = True
+        elif self.current_step >= self.max_step:
                 done = True
+                info['timeout'] = True
 
                 if isTouch:
                     reward += 2
                 else:
                     reward -= 1
-
-
         
         # print(reward)
         self.distVec = self.goal - objPos
@@ -323,7 +317,7 @@ if __name__ == "__main__":
     done = False
     while i < 20* 30:
     # while not done:
-        obs, _, done, _, _ = env.step([1, 0])
+        obs, _, done, _, info = env.step([1, 0])
         i += 1
         # print(obs)
     
