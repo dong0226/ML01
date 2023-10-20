@@ -8,6 +8,7 @@ from gymnasium.utils import seeding
 import numpy as np
 from time import time
 import matplotlib.pyplot as plt
+from random import choice
 
 class PushEnv(gym.Env):
     def __init__(self, use_camera=True, use_gui=True):
@@ -79,8 +80,10 @@ class PushEnv(gym.Env):
 
         robot_init_y = np.random.uniform(low=-0.4, high=0.4)
 
+        objects = ["models/random/cube0.urdf", 
+                   "models/random/cube1.urdf"]
         self.tableUid = p.loadURDF("models/table/table.urdf",basePosition=[0.5, 0, -0.62])
-        self.objUid = p.loadURDF("models/random/cube0.urdf", basePosition=self.init_pos, globalScaling=1)
+        self.objUid = p.loadURDF(choice(objects), basePosition=self.init_pos, globalScaling=1)
         self.GoalUid = p.loadURDF("models/block.urdf",basePosition=self.goal)
         
 
