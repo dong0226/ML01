@@ -1,3 +1,10 @@
+'''
+This is the test code of the PushEnv.
+ 
+To test the environment, 
+press either the up, down, left or right keys on the keyboard, 
+and observe how the Panda robot interact with the environment. 
+'''
 import object_pushing
 import gymnasium as gym
 from pynput import keyboard
@@ -7,6 +14,7 @@ import pybullet as p
 max_speed = 1
 FPS = 20
 
+# generate the velocity vector based on the keys pressed
 def get_vel_from_keys(keys):
     vx, vy = 0, 0
     if p.B3G_UP_ARROW in keys:
@@ -28,10 +36,11 @@ done = False
 while True:
     if done:
         env.reset()
-        
-    keys = p.getKeyboardEvents()
     
+    # capture key events
+    keys = p.getKeyboardEvents()
     vel = get_vel_from_keys(keys)
+    
     # # Take a step in the environment with the specified velocities
     obs, reward, done,_, info = env.step(vel)
     sleep(1/FPS)

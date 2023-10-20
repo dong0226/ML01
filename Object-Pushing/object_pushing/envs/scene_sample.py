@@ -3,15 +3,10 @@ import pybullet as p
 import pybullet_data as pd 
 from math import pi
 import gymnasium as gym
-
 from gymnasium import error,spaces,utils
 from gymnasium.utils import seeding
 import numpy as np
-
-import pkgutil
-egl = pkgutil.get_loader('eglRenderer')
-from time import sleep, time
-
+from time import time
 import matplotlib.pyplot as plt
 
 class PushEnv(gym.Env):
@@ -23,8 +18,7 @@ class PushEnv(gym.Env):
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
-        # p.connect(p.DIRECT)
-        
+
         
         self.action_space = spaces.Box(low=np.ones(2)*-1, high=np.ones(2)) # eef vel: [vx, vy, vz]
 
@@ -38,18 +32,20 @@ class PushEnv(gym.Env):
                 'goal_pos': gym.spaces.Box(low=np.array([0, -0.5, -0.1]) -0.05, 
                                         high=np.array([1, 0.5, 1]) +0.05, 
                                         dtype=np.float32),
+                'in_touch': gym.spaces.Box(low=np.array([0]), 
+                                        high=np.array([1]), 
+                                        dtype=np.bool_),
             }
         if use_camera:
             state_dict['cam_img'] = gym.spaces.Box(low=0, high=255, shape=(240, 240, 3), dtype=np.uint8)
             
         self.observation_space = gym.spaces.Dict(state_dict)
 
-        # self.observation_space = gym.spaces.Box(low=0, high=255, shape=(240, 240, 3), dtype=np.uint8)
         
-        self.max_step = 200
+        self.max_step = 300
         self.dt = 1./20.
         p.setTimeStep(self.dt)
-        self.dv = 2 * self.dt
+        self.dv = 2 * self.dt # set the maximum velocity 
         
         # define camera pose
         self.visPitch = -60
@@ -84,10 +80,6 @@ class PushEnv(gym.Env):
         robot_init_y = np.random.uniform(low=-0.4, high=0.4)
 
         self.tableUid = p.loadURDF("models/table/table.urdf",basePosition=[0.5, 0, -0.62])
-        # self.objUid = p.loadURDF("models/random/010.urdf", 
-        #                     basePosition=[0.5, 0, 0.05], 
-        #                     baseOrientation=p.getQuaternionFromEuler([pi/2, 0, 0]), 
-        #                     globalScaling=2)
         self.objUid = p.loadURDF("models/random/cube0.urdf", basePosition=self.init_pos, globalScaling=1)
         self.GoalUid = p.loadURDF("models/block.urdf",basePosition=self.goal)
         
@@ -122,22 +114,17 @@ class PushEnv(gym.Env):
         ObjState = p.getBasePositionAndOrientation(self.objUid)
         objPos = np.array(ObjState[0])
 
+        observation = {
+                "eef_pos": eefPos.astype(np.float32), 
+                "obj_pos": objPos.astype(np.float32), 
+                "goal_pos": self.goal.astype(np.float32), 
+                "in_touch": False, 
+
+            }
         if self.use_camera:
             img = self.render()
-            observation = {
-                "cam_img": img, 
-                "eef_pos": eefPos.astype(np.float32), 
-                "obj_pos": objPos.astype(np.float32), 
-                "goal_pos": self.goal.astype(np.float32), 
+            observation["cam_img"] =img
 
-            }
-        else:
-            observation = {
-                "eef_pos": eefPos.astype(np.float32), 
-                "obj_pos": objPos.astype(np.float32), 
-                "goal_pos": self.goal.astype(np.float32), 
-
-            }
 
 
         
@@ -152,9 +139,9 @@ class PushEnv(gym.Env):
         dx, dy = action
         dx *= self.dv
         dy *= self.dv
-        # dz *= self.dv
         
-        currentLinkState = p.getLinkState(self.pandaUid, 7) # the pose of the 7th link
+        # get the new position of the end effector
+        currentLinkState = p.getLinkState(self.pandaUid, 7) # the pose of the 7th link, i.e. the end-effector
         currentPosition = currentLinkState[4]
         currentOrientation = currentLinkState[5]
         
@@ -162,7 +149,7 @@ class PushEnv(gym.Env):
                      currentPosition[1]+dy,
                      self.z]
         
-        currentJointAngles = p.getJointState(self.pandaUid, 7)
+        # calculate in
         newJointAngles = p.calculateInverseKinematics(self.pandaUid, 7, newPosition, p.getQuaternionFromEuler([0.,-pi,pi/2.]))
         
         # set new joint values
@@ -196,40 +183,28 @@ class PushEnv(gym.Env):
         # if contact_pts:
         #     print("--", contact_pts)
         
+        observation = {
+                "eef_pos": eefPos.astype(np.float32), 
+                "obj_pos": objPos.astype(np.float32), 
+                "goal_pos": self.goal.astype(np.float32),
+                "in_touch": isTouch 
 
+            }
+        
         if self.use_camera:
             img = self.render()
-            observation = {
-                "cam_img": img, 
-                "eef_pos": eefPos.astype(np.float32), 
-                "obj_pos": objPos.astype(np.float32), 
-                "goal_pos": self.goal.astype(np.float32), 
+            observation["cam_img"] = img
 
-            }
-        else:
-            observation = {
-                "eef_pos": eefPos.astype(np.float32), 
-                "obj_pos": objPos.astype(np.float32), 
-                "goal_pos": self.goal.astype(np.float32), 
-
-            }
         
         # --------- reward calculation ----------
 
         velReward = self.distVec[:2] @ objVel[:2]
         reward += velReward * 10  #* self.dt * 0.1
-        # print(velReward * 100)
 
-        
-        
         # add a penalty if the object doesn't move
         if np.linalg.norm(objVel[:2]) <= 0.002:
             reward -= 0.1 * self.dt
-            # effDist =  np.linalg.norm(eefPos[:2] - objPos[:2])
-            # effDist = 0 if isTouch else (effDist - 0.05)
             effDist = objPos[:2] - eefPos[:2]
-            # reward -= 20 * self.dt * (effDist @ )
-
             reward += 20 * self.dt *  (effDist @ eefVel[:2])
 
         # define output info
@@ -267,10 +242,8 @@ class PushEnv(gym.Env):
                 else:
                     reward -= 1
         
-        # print(reward)
         self.distVec = self.goal - objPos
 
-        # observation = img
         return observation, reward, done, False, info
         
     def render(self):
