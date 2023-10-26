@@ -1,10 +1,23 @@
-# Test of the Neural Network #
+# Neural Network Test #
+This package contains the testing code of the Actor-Critic network for the Gym environment PushEnv.  
 
-This package contains an OpenAI Gym environment called PushEnv, utilized with PyBullet.  
-
-To test the environment, open a new terminal at the current directory and run the following command
+## Installation
 ```
-python keyboard_test.py
+pip install requirements.txt
+```
+
+## Code Files
+|  File   | Explaination  |
+|  ----  | ----  |
+| ```nn_test.py``` | The test code |
+| ```models.py``` | The actor-critic neural network model |
+| ```scene_sample.py``` | The OpenAI Gym environment |
+
+## Test
+
+To test the neural network, open a new terminal at the current directory and run the following command
+```
+python nn_test.py
 ```
 
 # Test History #
