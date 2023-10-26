@@ -2,6 +2,8 @@ __pycache__/
 Object-Pushing/object_pushing/__pycache__/
 Object-Pushing/object_pushing/envs/__pycache__/
 Object-Pushing/object_pushing.egg-info/
+1 GymAssignment/__pycache__/
+2 NNAssignment/__pycache__/
 tmp/
 sac_log/
 sac-pushing-v0.zip
