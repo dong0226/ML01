@@ -1,4 +1,4 @@
-# Sample Environment #
+# Test of the Neural Network #
 
 This package contains an OpenAI Gym environment called PushEnv, utilized with PyBullet.  
 

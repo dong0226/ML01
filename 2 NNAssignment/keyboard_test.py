@@ -7,7 +7,6 @@ and observe how the Panda robot interact with the environment.
 '''
 import object_pushing
 import gymnasium as gym
-from pynput import keyboard
 from time import sleep
 import pybullet as p
 from scene_sample import PushEnv
