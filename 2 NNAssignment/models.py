@@ -1,11 +1,15 @@
 import torch 
 import torch.nn as nn
 from functools import reduce
+import numpy as np
 
 IMAGE_SHAPE = (3, 240, 240)
 EEF_POS_SHAPE = 3
 OBJ_POS_SHAPE = 3
 GOAL_POS_SHAPE = 3
+
+mse_fcn = nn.MSELoss()
+
 
 
 def create_conv_layers(in_channels, architecture):
@@ -142,11 +146,13 @@ class ACNet(nn.Module):
                 value_net_list=[32, 1],
                 test=False, 
                 obj_pos_embd_list=[16], 
-                goal_pos_embd_list=[16]
+                goal_pos_embd_list=[16], 
+                add_noise=True
                 ):
         super().__init__()
         
         self.test = test
+        self.add_noise = add_noise
         
         # design the feature extraction network, respectively 
         self.img_embd_net = ConvFCNet(IMAGE_SHAPE, img_conv_list, img_fc_list)
@@ -159,10 +165,16 @@ class ACNet(nn.Module):
 
         self.concat_size = embd_dim * 5 if self.test else embd_dim * 3 # determine size of concatenated features
         
-        self.policy_net = create_fc_layers(self.concat_size, policy_net_list, last_act=torch.nn.Tanh())
+        self.policy_net_mean = create_fc_layers(self.concat_size, policy_net_list, last_act=torch.nn.Tanh())
+        self.policy_net_var = create_fc_layers(self.concat_size, policy_net_list, last_act=torch.nn.ReLU())
         self.value_net = create_fc_layers(self.concat_size, value_net_list)
         
-    def forward(self, obs):
+    def forward(self, obs, target_v, reward):
+        '''
+        Args:
+            obs: a list containing all the observations from the environment. 
+                 with an order of [img, eef_pos, touch, obj_pos (optional), goal_pos (optional)]
+        '''
         if self.test:
             img, eef_pos, touch, obj_pos, goal_pos = obs # unpack the observations
             obj_pos_embd = self.obj_pos_embd_net(obj_pos)
@@ -175,15 +187,38 @@ class ACNet(nn.Module):
         eef_pos_embd = self.eef_pos_embd_net(eef_pos)
         touch_embd = self.touch_embd_net(touch).squeeze(1)
         
+        # concatenate the extracted featurs
         if self.test:
             x = torch.cat([img_embd, eef_pos_embd, touch_embd, obj_pos_embd, goal_pos_embd], dim=1)
         else:
             x = torch.cat([img_embd, eef_pos_embd, touch_embd])
             
-        policy = self.policy_net(x)
+        policy_mean = self.policy_net_mean(x)
         value = self.value_net(x)
         
-        return policy, value
+        if self.add_noise:
+            policy_std = self.policy_net_var(x)
+            noise = torch.rand_like(policy_std)
+            policy = policy_mean + noise * policy_std       
+        else:
+            policy = policy_mean  
+            policy_std = torch.zeros_like(policy_mean)   
+        
+         
+        loss = self.calculate_loss(policy, policy_mean, policy_std, value, reward, target_v)
+           
+        return policy, value, loss
+    
+    def calculate_loss(self, policy, policy_mean, policy_std, value, reward, target_v):
+        dist = torch.distributions.Normal(policy_mean[0], policy_std[0]+1e-5)
+        policy_loss = - torch.sum(value * dist.log_prob(policy))
+        value_loss = mse_fcn(target_v, value)
+        entropy_loss = -0.5 - 0.5 * torch.log(2 * torch.tensor(np.pi) * torch.exp(torch.tensor(1)) \
+                                              * (policy_std - 1 + 1e-5).pow(2)).sum()
+        
+        loss = policy_loss + value_loss + 0 * entropy_loss
+        
+        return loss
         
 
 

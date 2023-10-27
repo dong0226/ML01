@@ -1,9 +1,6 @@
 '''
-This is the test code of the PushEnv.
+This is the test code of the Actor-Critic network.
  
-To test the environment, 
-press either the up, down, left or right keys on the keyboard, 
-and observe how the Panda robot interact with the environment. 
 '''
 import object_pushing
 import gymnasium as gym
@@ -13,32 +10,29 @@ import pybullet as p
 from models import ACNet
 import torch 
 import torch.nn
+from torch.optim import Adam
 from scene_sample import PushEnv
+import numpy as np
 
+# optimizer = Adam()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 max_speed = 1
 FPS = 20
+lr = 1e-3
 
-# generate the velocity vector based on the keys pressed
-def get_vel_from_keys(keys):
-    vx, vy = 0, 0
-    if p.B3G_UP_ARROW in keys:
-        vx = -max_speed
-    elif p.B3G_DOWN_ARROW in keys:
-        vx = max_speed
-    if p.B3G_LEFT_ARROW in keys:
-        vy = -max_speed
-    elif p.B3G_RIGHT_ARROW in keys:
-        vy = max_speed
-        
-    return [vx, vy]
 
-def obs_to_tensor(obs_list):
-    tensor_list = [torch.from_numpy(obs).unsqueeze(0) for obs in obs_list]
+
+def obs_to_tensor(obs_list, dev):
+    '''
+    convert observations from numpy array to PyTorch tensors
+    '''
+    tensor_list = [torch.from_numpy(obs).unsqueeze(0).to(dev) for obs in obs_list]
     return tensor_list
 
-# Define the environment
+# Define the environment and the actor-critic network
 ac_net = ACNet(test=True)
+ac_net.to(device)
+optimizer = Adam(ac_net.parameters(), lr=lr)
 env = PushEnv()
 env.reset()
 
@@ -48,9 +42,11 @@ while True:
     if done:
         env.reset()
     
-    # # Take a step in the environment with the specified velocities
+    optimizer.zero_grad()
+    # Take a step in the environment with the specified velocities
     obs, reward, done,_, info = env.step(vel)
-    # ac_net()
+    
+    # put obervations into list
     obs_list = [
         obs["cam_img"].transpose(2, 0, 1) / 255, 
                 obs["eef_pos"],
@@ -58,10 +54,21 @@ while True:
                 obs["obj_pos"], 
                 obs["goal_pos"]
                 ]
-    # print(obs_list)
-    action, value = ac_net(obs_to_tensor(obs_list))
-    vel = action[0].detach().numpy()
-    print(action[0], value)
+
+    action, value, loss = ac_net(obs_to_tensor(obs_list, device), 
+                                 target_v=torch.Tensor([[1]]).to(device), 
+                                 reward=torch.Tensor([[reward]]).to(device))
+    
+    
+    vel = action[0].detach().cpu().numpy()
+    vel = np.clip(vel, -1, 1)
+
+    # optimize the network
+    loss.backward()
+    optimizer.step()
+    
+    print("action: ", vel)
+    print("value: ", value[0, 0].detach().cpu().numpy(), "loss: ", loss.detach().cpu().numpy())
     
     
     if info['success']:
